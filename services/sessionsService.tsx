@@ -1,6 +1,6 @@
 import { db } from '@/firebase/firebase';
 import { Session } from '@/types/session';
-import { addDoc, collection, deleteDoc, doc, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, Query, Timestamp, updateDoc, where } from 'firebase/firestore';
 
 class SessionService {
   private readonly collectionName = 'sessions';
@@ -85,6 +85,65 @@ class SessionService {
     } catch (error) {
       console.error('Error rejecting session:', error);
       throw new Error('Failed to reject session');
+    }
+  }
+
+  // Get all sessions or filter by status
+  async getSessions(filters?: { status?: string }): Promise<Session[]> {
+    try {
+      const sessionsRef = collection(db, this.collectionName);
+      let q: Query = sessionsRef;
+      
+      // Apply filters if provided
+      if (filters?.status) {
+        q = query(sessionsRef, where('status', '==', filters.status));
+      }
+      
+      // Order by date
+      q = query(q, orderBy('dateTime', 'desc'));
+      
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Session[];
+    } catch (error) {
+      console.error('Error getting sessions:', error);
+      throw new Error('Failed to get sessions');
+    }
+  }
+
+  // Book a session
+  async bookSession(sessionId: string, userId: string): Promise<void> {
+    try {
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      const sessionDoc = await getDoc(sessionRef);
+      
+      if (!sessionDoc.exists()) {
+        throw new Error('Session not found');
+      }
+
+      const sessionData = sessionDoc.data();
+      
+      // Check if session is full
+      if (sessionData.participants?.length >= sessionData.maxParticipants) {
+        throw new Error('Session is full');
+      }
+
+      // Check if user is already booked
+      if (sessionData.participants?.includes(userId)) {
+        throw new Error('You are already booked for this session');
+      }
+
+      // Update session with new participant
+      await updateDoc(sessionRef, {
+        participants: arrayUnion(userId),
+        bookedParticipants: increment(1),
+        updatedAt: Timestamp.now()
+      });
+    } catch (error) {
+      console.error('Error booking session:', error);
+      throw error;
     }
   }
 }

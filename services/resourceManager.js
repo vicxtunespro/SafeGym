@@ -6,7 +6,10 @@ import {
     doc,
     getDoc,
     getDocs,
-    updateDoc
+    orderBy,
+    query,
+    updateDoc,
+    where
 } from 'firebase/firestore';
 
 class ResourceManager {
@@ -25,10 +28,41 @@ class ResourceManager {
     }
 
     // Get all documents
-    async getAll() {
+    async getAll(filters = {}) {
         try {
-            const snapshot = await getDocs(this._collectionRef());
-            return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let q = this._collectionRef();
+            
+            // Apply filters if provided
+            if (filters.status) {
+                q = query(q, where('status', '==', filters.status));
+            }
+            
+            // Order by date if the collection is sessions
+            if (this.collectionName === 'sessions') {
+                try {
+                    q = query(q, orderBy('dateTime', 'desc'));
+                } catch (error) {
+                    if (error.message.includes('requires an index')) {
+                        console.warn('Index not yet created, fetching without ordering');
+                        // If index is not created, fetch without ordering
+                        q = this._collectionRef();
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+            
+            const snapshot = await getDocs(q);
+            return snapshot.docs.map(doc => {
+                const data = doc.data();
+                // Keep Firestore Timestamps as is - they will be handled by the components
+                return { 
+                    id: doc.id, 
+                    ...data,
+                    // Ensure dateTime is a Firestore Timestamp
+                    dateTime: data.dateTime || null
+                };
+            });
         } catch (error) {
             console.error(`❌ Failed to fetch documents from '${this.collectionName}':`, error);
             throw error;
@@ -40,7 +74,13 @@ class ResourceManager {
         try {
             const docSnap = await getDoc(this._docRef(id));
             if (!docSnap.exists()) throw new Error("Document not found");
-            return { id: docSnap.id, ...docSnap.data() };
+            const data = docSnap.data();
+            return { 
+                id: docSnap.id, 
+                ...data,
+                // Ensure dateTime is a Firestore Timestamp
+                dateTime: data.dateTime || null
+            };
         } catch (error) {
             console.error(`❌ Failed to fetch document '${id}' from '${this.collectionName}':`, error);
             throw error;

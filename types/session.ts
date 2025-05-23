@@ -19,8 +19,8 @@ export interface Session {
   endTime?: Timestamp | Date; // can be calculated
   
   // Participants
-  trainerId: string;
-  trainerName: string;
+  trainerId?: string; // Made optional
+  trainerName?: string;
   maxParticipants?: number; // required for group/class
   bookedParticipants?: number;
   participants?: string[]; // array of user IDs
@@ -41,4 +41,6 @@ export interface Session {
   
   // System Fields
   lastUpdatedBy?: string;
+
+  coverPhoto?: string;
 }
