@@ -1,4 +1,4 @@
-import { AuthProvider } from '@/contexts/AuthContext';
+// import { AuthProvider } from '@/contexts/AuthContext';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { Stack } from 'expo-router';
 import React from 'react';
@@ -6,11 +6,12 @@ import Toast from 'react-native-toast-message';
 import '../global.css';
 
 export default function RootLayout() {
-  const { user, newUser, role } = useAuthStore();
+  const { user, newUser, role, clearAuth } = useAuthStore();
+  // clearAuth();
   console.log(role);
 
   return (
-    <AuthProvider>
+    <React.Fragment>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={newUser}>
           <Stack.Screen name='(onBoard)' />
@@ -33,6 +34,6 @@ export default function RootLayout() {
         </Stack.Protected>
       </Stack>
       <Toast />
-    </AuthProvider>
+    </React.Fragment>
   );
 }

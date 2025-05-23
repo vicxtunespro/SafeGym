@@ -1,6 +1,19 @@
-import { db } from '@/firebase/firebase';
-import { Session } from '@/types/session';
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, orderBy, query, Query, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { db } from '../firebase/firebase';
+
+interface Session {
+  id: string;
+  type: 'group' | 'individual';
+  title: string;
+  description: string;
+  trainerId: string;
+  dateTime: string;
+  duration: number;
+  maxParticipants?: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdBy: string;
+  participants?: string[];
+}
 
 class SessionService {
   private readonly collectionName = 'sessions';
@@ -14,10 +27,13 @@ class SessionService {
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         bookedParticipants: 0,
-        participants: []
+        participants: [], // Initialize empty array
+        maxParticipants: sessionData?.maxParticipants || 1, // Default to 1 if not specified
       };
 
+      console.log('Creating session with data:', sessionWithMeta);
       const docRef = await addDoc(collection(db, this.collectionName), sessionWithMeta);
+      console.log('Session created with ID:', docRef.id);
       return docRef.id;
     } catch (error) {
       console.error('Error creating session:', error);
@@ -39,19 +55,32 @@ class SessionService {
   }
 
   // Get session by ID
-  async getSession(sessionId: string): Promise<Session | null> {
+  async getSession(sessionId: string): Promise<Session> {
     try {
-      const docSnap = await getDoc(doc(db, this.collectionName, sessionId));
-      if (docSnap.exists()) {
-        return {
-          id: docSnap.id,
-          ...docSnap.data()
-        } as Session;
+      const sessionRef = doc(db, this.collectionName, sessionId);
+      const sessionDoc = await getDoc(sessionRef);
+      
+      if (!sessionDoc.exists()) {
+        throw new Error('Session not found');
       }
-      return null;
+
+      const data = sessionDoc.data();
+      return {
+        id: sessionDoc.id,
+        type: data.type || 'individual',
+        title: data.title || '',
+        description: data.description || '',
+        trainerId: data.trainerId || '',
+        dateTime: data.dateTime?.toDate?.() || new Date().toISOString(),
+        duration: data.duration || 60,
+        maxParticipants: data.maxParticipants,
+        status: data.status || 'pending',
+        createdBy: data.createdBy || '',
+        participants: data.participants || []
+      };
     } catch (error) {
       console.error('Error getting session:', error);
-      throw new Error('Failed to get session');
+      throw error;
     }
   }
 
@@ -62,29 +91,6 @@ class SessionService {
     } catch (error) {
       console.error('Error deleting session:', error);
       throw new Error('Failed to delete session');
-    }
-  }
-
-  // Approve session (admin only)
-  async approveSession(sessionId: string): Promise<void> {
-    try {
-      await this.updateSession(sessionId, { status: 'approved' });
-    } catch (error) {
-      console.error('Error approving session:', error);
-      throw new Error('Failed to approve session');
-    }
-  }
-
-  // Reject session (admin only)
-  async rejectSession(sessionId: string, reason: string): Promise<void> {
-    try {
-      await this.updateSession(sessionId, { 
-        status: 'rejected',
-        rejectionReason: reason
-      });
-    } catch (error) {
-      console.error('Error rejecting session:', error);
-      throw new Error('Failed to reject session');
     }
   }
 
@@ -122,18 +128,30 @@ class SessionService {
       if (!sessionDoc.exists()) {
         throw new Error('Session not found');
       }
+      console.log('pass')
 
       const sessionData = sessionDoc.data();
       
+      // Check if session is approved
+      if (sessionData?.status !== 'approved') {
+        throw new Error('Session is not available for booking');
+      }
+      console.log('pass')
+
       // Check if session is full
-      if (sessionData.participants?.length >= sessionData.maxParticipants) {
+      const currentParticipants = sessionData?.participants || [];
+      const maxParticipants = sessionData?.maxParticipants || 1;
+
+      if (currentParticipants.length >= maxParticipants) {
         throw new Error('Session is full');
       }
+      console.log('pass2')
 
       // Check if user is already booked
-      if (sessionData.participants?.includes(userId)) {
+      if (currentParticipants.includes(userId)) {
         throw new Error('You are already booked for this session');
       }
+      console.log(userId)
 
       // Update session with new participant
       await updateDoc(sessionRef, {
@@ -141,8 +159,37 @@ class SessionService {
         bookedParticipants: increment(1),
         updatedAt: Timestamp.now()
       });
+      console.log('pass4')
     } catch (error) {
       console.error('Error booking session:', error);
+      throw error;
+    }
+  }
+
+  async getSessionsByParticipant(userId: string): Promise<Session[]> {
+    try {
+      const sessionsRef = collection(db, this.collectionName);
+      const q = query(sessionsRef, where('participants', 'array-contains', userId));
+      const snapshot = await getDocs(q);
+      
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: data.type || 'individual',
+          title: data.title || '',
+          description: data.description || '',
+          trainerId: data.trainerId || '',
+          dateTime: data.dateTime?.toDate?.() || new Date().toISOString(),
+          duration: data.duration || 60,
+          maxParticipants: data.maxParticipants,
+          status: data.status || 'pending',
+          createdBy: data.createdBy || '',
+          participants: data.participants || []
+        };
+      });
+    } catch (error) {
+      console.error('Error getting sessions by participant:', error);
       throw error;
     }
   }

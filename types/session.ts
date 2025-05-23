@@ -11,25 +11,25 @@ export interface Session {
   id: string;
   title: string;
   description: string;
-  type: SessionType;
+  type: 'individual' | 'group';
   
   // Timing
-  dateTime: Timestamp | Date;
+  dateTime: Timestamp;
   duration: number; // in minutes
   endTime?: Timestamp | Date; // can be calculated
   
   // Participants
-  trainerId?: string; // Made optional
-  trainerName?: string;
-  maxParticipants?: number; // required for group/class
-  bookedParticipants?: number;
-  participants?: string[]; // array of user IDs
+  trainerId: string;
+  trainerName: string;
+  maxParticipants: number;
+  participants?: string[];
+  bookedParticipants: number;
   
   // Status
-  status: SessionStatus;
+  status: 'pending' | 'approved' | 'rejected';
   rejectionReason?: string;
-  createdAt: Timestamp | Date;
-  updatedAt: Timestamp | Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
   
   // Session Details
   difficulty?: DifficultyLevel;
@@ -42,5 +42,7 @@ export interface Session {
   // System Fields
   lastUpdatedBy?: string;
 
+  // Media
   coverPhoto?: string;
+  coverPhotoUrl?: string;
 }

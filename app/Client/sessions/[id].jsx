@@ -1,5 +1,5 @@
-import { useAuth } from '@/contexts/AuthContext';
 import { sessionService } from '@/services/sessionsService';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Timestamp } from 'firebase/firestore';
@@ -11,11 +11,12 @@ import Toast from 'react-native-toast-message';
 export default function SessionDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState(null);
+  const {user} = useAuthStore();
+  console.log('User', user);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -30,9 +31,9 @@ export default function SessionDetail() {
 
         setSession({
           ...sessionData,
-          dateTime: sessionData.dateTime instanceof Timestamp 
-            ? sessionData.dateTime.toDate() 
-            : new Date(sessionData.dateTime || Date.now())
+          dateTime: sessionData?.dateTime instanceof Timestamp 
+            ? sessionData?.dateTime.toDate() 
+            : new Date(sessionData?.dateTime || Date.now())
         });
         setError(null);
       } catch (err) {
@@ -61,7 +62,8 @@ export default function SessionDetail() {
 
     try {
       setBooking(true);
-      await sessionService.bookSession(id, user.uid);
+      await sessionService.bookSession(id, user.id);
+      console.log('pass')
       
       // Refresh session data
       const updatedSession = await sessionService.getSession(id);
@@ -116,7 +118,7 @@ export default function SessionDetail() {
   const maxParticipants = session.maxParticipants || 0;
   const participantCount = Array.isArray(session.participants) ? session.participants.length : 0;
   const availableSlots = maxParticipants - participantCount;
-  const isBooked = user && session.participants?.includes(user.uid);
+  const isBooked = user && session.participants?.includes(user.id);
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">

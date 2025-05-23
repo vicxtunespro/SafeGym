@@ -1,6 +1,5 @@
 import { auth, db, storage } from '@/firebase/firebase'; // Import Firebase Storage and Firestore
-import { trainerManager } from '@/services/resourceManager';
-import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { create } from 'zustand';
 
@@ -64,13 +63,50 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
 
   // Fetch methods would call your API in a real app
   fetchTrainers: async () => {
-    const TrainerData = await trainerManager.getAll();
-    // For now, using mock data
-    set({ trainers: TrainerData });
+    try {
+      const trainersRef = collection(db, 'trainers');
+      const snapshot = await getDocs(trainersRef);
+      const trainersData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        firstName: doc.data().firstName || '',
+        lastName: doc.data().lastName || '',
+        email: doc.data().email || '',
+        phone: doc.data().phone || '',
+        profilePhoto: doc.data().profilePhoto,
+        password: doc.data().password || '',
+        isApproved: doc.data().isApproved || false
+      })) as Trainer[];
+      set({ trainers: trainersData });
+    } catch (error) {
+      console.error('Error fetching trainers:', error);
+      throw error;
+    }
   },
 
   fetchSessions: async () => {
-    
+    try {
+      const sessionsRef = collection(db, 'sessions');
+      const snapshot = await getDocs(sessionsRef);
+      const sessionsData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          type: data.type || 'individual',
+          title: data.title || '',
+          description: data.description || '',
+          trainerId: data.trainerId || '',
+          dateTime: data.dateTime?.toDate?.() || new Date().toISOString(),
+          duration: data.duration || 60,
+          maxParticipants: data.maxParticipants,
+          status: data.status || 'pending',
+          createdBy: data.createdBy || ''
+        } as Session;
+      });
+      set({ sessions: sessionsData });
+    } catch (error) {
+      console.error('Error fetching sessions:', error);
+      throw error;
+    }
   },
 
   fetchReviews: async () => {
@@ -157,19 +193,33 @@ export const useAdminStore = create<AdminStore>((set, get) => ({
   },
 
   approveSession: async (sessionId) => {
-    set((state) => ({
-      sessions: state.sessions.map((session) =>
-        session.id === sessionId ? { ...session, status: 'approved' } : session
-      ),
-    }));
+    try {
+      const sessionRef = doc(db, 'sessions', sessionId);
+      await updateDoc(sessionRef, { status: 'approved' });
+      set((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === sessionId ? { ...session, status: 'approved' } : session
+        ),
+      }));
+    } catch (error) {
+      console.error('Error approving session:', error);
+      throw error;
+    }
   },
 
   rejectSession: async (sessionId) => {
-    set((state) => ({
-      sessions: state.sessions.map((session) =>
-        session.id === sessionId ? { ...session, status: 'rejected' } : session
-      ),
-    }));
+    try {
+      const sessionRef = doc(db, 'sessions', sessionId);
+      await updateDoc(sessionRef, { status: 'rejected' });
+      set((state) => ({
+        sessions: state.sessions.map((session) =>
+          session.id === sessionId ? { ...session, status: 'rejected' } : session
+        ),
+      }));
+    } catch (error) {
+      console.error('Error rejecting session:', error);
+      throw error;
+    }
   },
 
   getSessionMetrics: () => {
